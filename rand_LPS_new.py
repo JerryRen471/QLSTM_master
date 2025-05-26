@@ -2,6 +2,7 @@ import numpy as np
 import torch as tc
 import pickle
 import copy
+import os
 
 '''LPS正则化'''
 def Orthogonalize_left2right(lps_l, chi):
@@ -91,7 +92,29 @@ for i in range(l):
     lps_l[i] = lps_l[i].cpu().numpy()
     print(lps_l[i].shape)
 
+# Use local directory for saving
+dir_path = "Data/target_state/Rand_large/chain%d" % l
 
-f = open('/Data/target_state/Rand_large/chain%d/state%d_normal_%d_%d_%d.pr'%(l, l, means, stds, seeds), 'wb')
+parent_dir = os.path.dirname(dir_path)
+if not os.access(parent_dir, os.W_OK):
+    print("当前进程无权限在父目录中创建子目录")
+    # 执行相应的错误处理逻辑
+    ...
+else:
+    try:
+        os.makedirs(dir_path)
+        print("目录创建成功")
+    except PermissionError:
+        print("当前进程无权限在目标目录中创建子目录")
+        # 执行相应的错误处理逻辑
+        ...
+
+# Check if directory exists and create if it doesn't
+save_dir = dir_path
+if not os.path.exists(save_dir):
+    os.makedirs(save_dir)
+    print(f"Created directory: {save_dir}")
+
+f = open(save_dir+'/state%d_normal_%d_%d_%d.pr'%(l, means, stds, seeds), 'wb')
 pickle.dump(lps_l, f)
 f.close()
