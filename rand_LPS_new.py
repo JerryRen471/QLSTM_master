@@ -102,7 +102,7 @@ if not os.access(parent_dir, os.W_OK):
     ...
 else:
     try:
-        os.makedirs(dir_path)
+        os.makedirs(dir_path, exist_ok=True)
         print("目录创建成功")
     except PermissionError:
         print("当前进程无权限在目标目录中创建子目录")
