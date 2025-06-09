@@ -241,9 +241,9 @@ def run(para:dict={}):
     para_def['miu2'] = 2
     para_def['seed'] = 0
 
-    para_def['epoch'] = 500
-    para_def['batch'] = 500  # iteration=30-40
-    para_def['lr'] = 1 * 1e-4
+    para_def['epoch'] = 1000
+    para_def['batch'] = 1000  # iteration=30-40
+    para_def['lr'] = 5 * 1e-3
 
     para_def['measure_train'] = 100
     para_def['sample_num'] = 4000

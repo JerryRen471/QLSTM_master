@@ -5,12 +5,18 @@ import json
 import os
 import copy
 
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('--Nm', type=int, default=100)
+parser.add_argument('--Ns', type=int, default=10000)
+args = parser.parse_args()
+
 para = dict()
 para['epoch'] = 500
 para['num_f'] = 10
 para['chi'] = 16
-para['measure_train'] = 20
-para['sample_num'] = 10000
+para['measure_train'] = args.Nm
+para['sample_num'] = args.Ns
 para['hx'] = 1
 chain_dir = f"chain{para['num_f']}"
 result_path = os.path.join('Result', 'Rand_large', chain_dir, 'normal_1_3_0')
