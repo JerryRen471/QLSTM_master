@@ -24,7 +24,7 @@ def extract_from_json(path):
     fide = np.mean(fide_[-10: -1])
     return loss, loss_log, fide
 
-Ns_list = [1000 + 500*i for i in range(7)] + [10000 + 5000*i for i in range(7)]
+Ns_list = [1000 + 1000*i for i in range(10)]
 print(Ns_list)
 Nm = 100
 
