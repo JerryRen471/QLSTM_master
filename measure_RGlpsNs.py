@@ -76,7 +76,7 @@ class Sampling_Ns(measure_RGlpsNm.measure_Nm):
                         f = open(self.para['save_Nsdata_path']+'%d_%d' % (self.para['measure_train'], self.sample_num) + '.txt', 'a+')
                         f.write(", ".join(map(str, array_save[:self.para['retained_feature']])) + "\n")
                         f.close()
-                if count_tmp == self.sample_num:
+                if count_tmp == iteration_num:
                     break
             self.Ns_init['%d' % i] = s
             print(count_tmp)
