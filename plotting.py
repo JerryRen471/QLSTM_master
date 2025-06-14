@@ -12,7 +12,7 @@ parser.add_argument('--Ns', type=int, default=10000)
 args = parser.parse_args()
 
 para = dict()
-para['epoch'] = 500
+para['epoch'] = 200
 para['num_f'] = 10
 para['chi'] = 16
 para['measure_train'] = args.Nm

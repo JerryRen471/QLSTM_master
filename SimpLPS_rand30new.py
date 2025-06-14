@@ -1,6 +1,6 @@
 import torch as tc
 import numpy as np
-from torch import nn
+from torch import nn, no_grad
 from torch.utils.data import DataLoader, TensorDataset
 import pickle
 import math
@@ -149,6 +149,9 @@ def SimpleMPS(train_dataset, para=None):
         print(np.log(train_loss / train_tot))
         trainloss_List.append(train_loss / train_tot)
         trainloss_log.append(np.log(train_loss / train_tot))
+        if t % 10 == 0:
+            with no_grad():
+                pass
 
         '''计算Fidelity_yang'''
         if para['if_fidelity_yang'] and ((t + 1) % para['fidelity_yang_epoch'] == 0):
@@ -241,9 +244,9 @@ def run(para:dict={}):
     para_def['miu2'] = 2
     para_def['seed'] = 0
 
-    para_def['epoch'] = 1000
+    para_def['epoch'] = 200
     para_def['batch'] = 1000  # iteration=30-40
-    para_def['lr'] = 5 * 1e-3
+    para_def['lr'] = 1 * 1e-3
 
     para_def['measure_train'] = 100
     para_def['sample_num'] = 4000
@@ -286,7 +289,7 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(description='Argument Parser of Init States')
-    parser.add_argument('--Ns', type=int, default=1000)
+    parser.add_argument('--Ns', type=int, default=10000)
     parser.add_argument('--Nm', type=int, default=100)
     
     args = parser.parse_args()
