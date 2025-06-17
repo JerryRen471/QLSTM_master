@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import json
 
 para = dict()
-para['epoch'] = 100
+para['epoch'] = 200
 para['num_f'] = 10
 para['chi'] = 16
 para['measure_train'] = 100
@@ -24,19 +24,31 @@ def extract_from_json(path):
     fide = np.mean(fide_[-10: -1])
     return loss, loss_log, fide
 
-Ns_list = [1000 + 1000*i for i in range(10)]
+Ns_list = [100 + 100*i for i in range(10)]
 print(Ns_list)
 Nm = 100
 
 loss_ls = []
 loss_log_ls = []
 in_fide_ls = []
+fide_ls = []
+
 for Ns in Ns_list:
     path = os.path.join(result_path, f'{para["measure_train"]}_{Ns}_chi{para["chi"]}_miu{230}.json')
     loss, loss_log, fide = extract_from_json(path)
     loss_ls.append(loss)
     loss_log_ls.append(loss_log)
     in_fide_ls.append(1 - fide)
+    fide_ls.append(fide)
+
+plt.figure()
+x = [(i) for i in Ns_list]
+y = fide_ls
+plt.ylim(0.95, 1)
+plt.scatter(x, y)
+plt.xlabel('N_s')
+plt.ylabel('F')
+plt.savefig(f'Picture/Fide_Vs_Ns.svg')
 
 plt.figure()
 x = [1/np.sqrt(i) for i in Ns_list]
