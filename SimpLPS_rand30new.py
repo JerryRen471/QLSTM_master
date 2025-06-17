@@ -11,6 +11,7 @@ import json
 import time
 import shutil
 from datetime import datetime
+import pandas as pd
 
 '''华为服务器运行'''
 def Orthogonalize_left2right(mps, chi, device='cuda'):
@@ -98,7 +99,7 @@ def SimpleMPS(train_dataset, para=None):
     para_def['epoch'] = 500
     para_def['batch'] = 5000
     para_def['lr'] = 3.0 * 1e-3
-    para['if_fidelity_yang'] = True
+    para_def['if_fidelity_yang'] = True
     para_def['fidelity_yang_epoch'] = 2
 
     para_def['device'] = 'cuda:0'  # 'cpu'
@@ -174,6 +175,30 @@ def SimpleMPS(train_dataset, para=None):
                 print('%.16f' % abs(fide_new).cpu())
                 fide1.append('%.16f' % abs(fide_new).cpu())
             classifier.train()
+
+    # Calculate statistics for the last 20 points
+    last_20_fide1 = [float(x) for x in fide1[-20:]]
+    last_20_trainloss = trainloss_List[-20:]
+    
+    stats = {
+        'fide1_mean': np.mean(last_20_fide1),
+        'fide1_std': np.std(last_20_fide1),
+        'trainloss_mean': np.mean(last_20_trainloss),
+        'trainloss_std': np.std(last_20_trainloss)
+    }
+    
+    # Create a DataFrame with parameters and statistics, excluding specific parameters
+    excluded_params = ['result_dir', 'target_state_dir', 'normal_dir', 'device', 'dtype']
+    filtered_para = {k: v for k, v in para.items() if k not in excluded_params}
+    all_data = {**filtered_para, **stats}  # Combine filtered parameters and statistics
+    stats_df = pd.DataFrame([all_data])
+    
+    # Save to CSV
+    csv_path = os.path.join(result_path, f'TrainResult.csv')
+    # Check if file exists to determine whether to write header
+    header = not os.path.exists(csv_path)
+    stats_df.to_csv(csv_path, mode='a', header=header, index=False)
+    print(f"Statistics saved to: {csv_path}")
 
     dic = {'trainloss_List': trainloss_List, 'trainloss_log': trainloss_log, 'fide1': fide1}
     with open(os.path.join(result_path, f'{para["measure_train"]}_{para["sample_num"]}_chi{para["chi"]}_miu{230}.json'), 'w') as json_file:
