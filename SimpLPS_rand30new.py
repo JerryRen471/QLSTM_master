@@ -1,3 +1,4 @@
+from random import randint
 import torch as tc
 import numpy as np
 from torch import nn, no_grad
@@ -7,6 +8,9 @@ import math
 import copy
 import os
 import json
+import time
+import shutil
+from datetime import datetime
 
 '''华为服务器运行'''
 def Orthogonalize_left2right(mps, chi, device='cuda'):
@@ -214,6 +218,27 @@ class sMPS(nn.Module):
         return p
 
 
+def get_experiment_dir(base_dir):
+    """Create a new experiment directory with timestamp and return its path"""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    exp_dir = os.path.join(base_dir, f"experiment_{timestamp}")
+    os.makedirs(exp_dir, exist_ok=True)
+    return exp_dir
+
+def manage_experiment_dirs(base_dir, max_experiments=10):
+    """Keep only the most recent max_experiments directories"""
+    if not os.path.exists(base_dir):
+        return
+    
+    # Get all experiment directories
+    exp_dirs = [d for d in os.listdir(base_dir) if d.startswith("experiment_")]
+    exp_dirs.sort()  # Sort by timestamp since directory names contain timestamps
+    
+    # Remove oldest directories if we have more than max_experiments
+    while len(exp_dirs) > max_experiments:
+        oldest_dir = exp_dirs.pop(0)
+        shutil.rmtree(os.path.join(base_dir, oldest_dir))
+
 def run(para:dict={}):
     """
     ===================================
@@ -244,12 +269,21 @@ def run(para:dict={}):
 
     para = dict(para_def, **para)
 
+    # Create experiment directory and manage old experiments
+    base_exp_dir = os.path.join(para['result_dir'], 'experiments')
+    os.makedirs(base_exp_dir, exist_ok=True)
+    exp_dir = get_experiment_dir(base_exp_dir)
+    manage_experiment_dirs(base_exp_dir, max_experiments=10)
+
+    # Save parameters to experiment directory
+    with open(os.path.join(exp_dir, 'parameters.json'), 'w') as f:
+        json.dump(para, f, indent=4)
+
     chain_dir = f"chain{para['num_f']}"
     data_path = os.path.join('Data/Random_Glps', chain_dir, para['normal_dir'])
     
     xy = np.loadtxt(os.path.join(data_path, 'Ns', f'{para["measure_train"]}_{para["sample_num"]}.txt'), 
                     delimiter=',', dtype=np.float64, skiprows=1)
-    # f = open(os.path.join(data_path, 'Ns', f'{para["measure_train"]}_{para["sample_num"]}.txt'))
     train_test_num = list(range(1))  # 读取第一行
     with open(os.path.join(data_path, 'Ns', f'{para["measure_train"]}_{para["sample_num"]}.txt')) as f:
         for i in range(1):
@@ -281,10 +315,15 @@ def run(para:dict={}):
     print(x_train.shape)
 
     Rst = SimpleMPS(train_dataset, para)
-    print(Rst)
+    
+    # Save results to experiment directory
+    with open(os.path.join(exp_dir, 'results.json'), 'w') as f:
+        json.dump(Rst, f, indent=4)
+    
+    print(f"Experiment results saved to: {exp_dir}")
+    return Rst
 
 if __name__ == '__main__':
-    import time
     import argparse
 
     parser = argparse.ArgumentParser(description='Argument Parser of Init States')
@@ -294,7 +333,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     para = {
         'sample_num': int(args.Ns),
-        'measure_train': int(args.Nm)
+        'measure_train': int(args.Nm),
+        'seed': randint(0, 1000)
     }
     print(para)
     start_time = time.time()
