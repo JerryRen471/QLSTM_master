@@ -200,9 +200,17 @@ def SimpleMPS(train_dataset, para=None):
     stats_df.to_csv(csv_path, mode='a', header=header, index=False)
     print(f"Statistics saved to: {csv_path}")
 
+    # Convert parameters to JSON serializable format
+    json_para = filtered_para.copy()
+    # json_para['dtype'] = str(json_para['dtype'])
+    
     dic = {'trainloss_List': trainloss_List, 'trainloss_log': trainloss_log, 'fide1': fide1}
     with open(os.path.join(result_path, f'{para["measure_train"]}_{para["sample_num"]}_chi{para["chi"]}_miu{230}.json'), 'w') as json_file:
         json.dump(dic, json_file)
+    
+    # Save parameters separately
+    with open(os.path.join(result_path, f'parameters_{para["measure_train"]}_{para["sample_num"]}_chi{para["chi"]}_miu{230}.json'), 'w') as json_file:
+        json.dump(json_para, json_file, indent=4)
 
     return {'trainloss_List': trainloss_List, 'trainloss_log': trainloss_log, 'fexp': fide1}
 
@@ -300,9 +308,12 @@ def run(para:dict={}):
     exp_dir = get_experiment_dir(base_exp_dir)
     manage_experiment_dirs(base_exp_dir, max_experiments=10)
 
+    excluded_params = ['result_dir', 'target_state_dir', 'normal_dir', 'device', 'dtype']
+    filtered_para = {k: v for k, v in para.items() if k not in excluded_params}
+    print(filtered_para)
     # Save parameters to experiment directory
     with open(os.path.join(exp_dir, 'parameters.json'), 'w') as f:
-        json.dump(para, f, indent=4)
+        json.dump(filtered_para, f, indent=4)
 
     chain_dir = f"chain{para['num_f']}"
     data_path = os.path.join('Data/Random_Glps', chain_dir, para['normal_dir'])
