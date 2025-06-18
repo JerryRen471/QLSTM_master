@@ -8,13 +8,13 @@ import os
 def Orthogonalize_left2right(lps_l, chi):
     type = lps_l[0].dtype
     for i in range(0, len(lps_l) - 1):
-        merged_tensor = tc.tensordot(lps_l[i], lps_l[i+1], ([3], [1]))
+        merged_tensor = tc.tensordot(lps_l[i], lps_l[i + 1], ([3], [1]))
         s1 = merged_tensor.shape
         merged_tensor = merged_tensor.reshape(s1[0]*s1[1]*s1[2], s1[3]*s1[4]*s1[5])
-        merged_tensor = merged_tensor.cpu().numpy()
-        u, lm, v = np.linalg.svd(merged_tensor,full_matrices=False)
-        u,lm,v = tc.from_numpy(u),tc.from_numpy(lm),tc.from_numpy(v)
-        u, lm, v = u.to(dtype=type,device=device), lm.to(dtype=type,device=device), v.to(dtype=type,device=device)
+        # merged_tensor = merged_tensor.cpu().numpy()
+        u, lm, v = tc.linalg.svd(merged_tensor,full_matrices=False)
+        # u,lm,v = tc.from_numpy(u),tc.from_numpy(lm),tc.from_numpy(v)
+        # u, lm, v = u.to(dtype=type,device=device), lm.to(dtype=type,device=device), v.to(dtype=type,device=device)
         bdm = min(chi, len(lm))
         u = u[:, :bdm]
         lm = tc.diag(lm[:bdm])
@@ -22,8 +22,8 @@ def Orthogonalize_left2right(lps_l, chi):
         lps_l[i] = u.reshape(s1[0], s1[1], s1[2], bdm)
         v = tc.mm(lm, v)
         s2 = lps_l[i + 1].shape
-        lps_l[i+1] = v.reshape(v.shape[0], s2[0], s2[2], s2[3])
-        lps_l[i + 1] = tc.transpose(lps_l[i+1],0,1)
+        lps_l[i + 1] = v.reshape(v.shape[0], s2[0], s2[2], s2[3])
+        lps_l[i + 1] = tc.transpose(lps_l[i + 1], 0, 1)
     return lps_l
 
 def Orthogonalize_right2left(lps_l, chi):
@@ -50,10 +50,10 @@ def Orthogonalize_right2left(lps_l, chi):
 def calculate_inner_product_new(lps_l0,lps_l1):
     LPS_l0 = copy.deepcopy(lps_l0)
     s0 = LPS_l0[0].shape
-    LPS_l0[0] = LPS_l0[0].reshape(s0[0], s0[2], s0[3])
+    LPS_l0[0] = LPS_l0[0].squeeze()
     LPS_l1 = copy.deepcopy(lps_l1)
     s1 = LPS_l1[0].shape
-    LPS_l1[0] = LPS_l1[0].reshape(s1[0], s1[2], s1[3])
+    LPS_l1[0] = LPS_l1[0].squeeze()
     tmp0 = LPS_l0[0]
     tmp0 = tc.einsum('abc,ade->bcde', [tmp0,LPS_l0[0].conj()])
     tmp0 = tc.einsum('bcde,fdg->bcefg', [tmp0,LPS_l1[0]])
