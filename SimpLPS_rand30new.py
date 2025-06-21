@@ -1,6 +1,7 @@
 from random import randint
 import torch as tc
 import numpy as np
+from scipy.linalg import sqrtm
 from torch import nn, no_grad
 from torch.utils.data import DataLoader, TensorDataset
 import pickle
@@ -77,6 +78,27 @@ def calculate_inner_product_new(mps_l0, mps_l1, device='cuda'):
     inner_product = tc.squeeze(tmp0)
     return inner_product
 
+'''将LPS形式密度矩阵收缩(边界几何指标>=1)/先收为MPO再收为密度矩阵'''
+def contract_LPS_new(lps_l):
+    LPS_l = copy.deepcopy(lps_l)
+    n = len(LPS_l)
+    tmp = list(range(n))
+    for i in range(n):
+        s = LPS_l[i].shape
+        tmp[i] = tc.einsum('abcd,aefg->bcdefg',LPS_l[i],LPS_l[i].conj())
+        tmp[i] = tmp[i].permute(4,0,3,1,2,5)
+        tmp[i] = tmp[i].reshape(s[2],s[1]**2,s[2],s[3]**2)
+    tmp1 = tmp[0]
+    for i in range(1,n):
+        tmp1 = tc.tensordot(tmp1, tmp[i], ([-1], [1]))
+    a = list(range(2, 2 * (n + 1), 2))
+    b = list(range(3, 2 * (n + 1), 2))
+    o = [1] + a + [0] + b
+    tmp1 = tmp1.permute(o)  # 改变长度需改变(1,2,4,...,2n,0,3,5,...,2n-1,2n+1)
+    s1 = tmp1.shape
+    rho = tmp1.reshape(s1[0], 2 ** n, 2 ** n, s1[-1])
+    rho = tc.einsum('abca->bc', rho)
+    return rho
 
 def calculate_fidelity_yang(mps_l0, mps_l1):
     MPS_l0 = copy.deepcopy(mps_l0)
@@ -101,6 +123,8 @@ def SimpleMPS(train_dataset, para=None):
     para_def['lr'] = 3.0 * 1e-3
     para_def['if_fidelity_yang'] = True
     para_def['fidelity_yang_epoch'] = 2
+    para_def['if_fidelity_def'] = True
+    para_def['fidelity_def_epoch'] = 2
 
     para_def['device'] = 'cuda:0'  # 'cpu'
     para_def['dtype'] = tc.complex128
@@ -134,7 +158,8 @@ def SimpleMPS(train_dataset, para=None):
     testloss_List = []
     trainloss_log = []
     testloss_log = []
-    fide1 = []
+    fide_def_list = []
+    fide_yang_list = []
 
     for t in range(para['epoch']):  # epoch
         print('\n-------- Epoch: %d --------' % t)
@@ -167,28 +192,52 @@ def SimpleMPS(train_dataset, para=None):
                 rhostate[i] = tc.from_numpy(rhostate[i]).to(para['device'])
             classifier.eval()
             with tc.no_grad():
-                mps_l6 = copy.deepcopy(classifier.mps_l)
-                Orthogonalize_left2right(mps_l6, chi=para['chi'], device=para['device'])
-                Orthogonalize_right2left(mps_l6, chi=para['chi'], device=para['device'])
-                fide_new = calculate_fidelity_yang(mps_l6, rhostate)
+                mps_tmp = copy.deepcopy(classifier.mps_l)
+                Orthogonalize_left2right(mps_tmp, chi=para['chi'], device=para['device'])
+                Orthogonalize_right2left(mps_tmp, chi=para['chi'], device=para['device'])
+                fide_new = calculate_fidelity_yang(mps_tmp, rhostate)
                 print('fidelity_yang')
                 print('%.16f' % abs(fide_new).cpu())
-                fide1.append('%.16f' % abs(fide_new).cpu())
+                fide_yang_list.append('%.16f' % abs(fide_new).cpu())
+            classifier.train()
+
+        '''计算密度矩阵Fidelity'''
+        if para['if_fidelity_def'] and ((t + 1) % para['fidelity_def_epoch'] == 0):
+            with open(os.path.join(target_state_path, f'state{para["num_f"]}_normal_1_3_0.pr'), 'rb') as f:
+                rhostate = pickle.load(f)
+            for i in range(len(rhostate)):
+                rhostate[i] = tc.from_numpy(rhostate[i]).to(para['device'])
+            classifier.eval()
+            with tc.no_grad():
+                mps_tmp = copy.deepcopy(classifier.mps_l)
+                Orthogonalize_left2right(mps_tmp, chi=para['chi'])
+                Orthogonalize_right2left(mps_tmp, chi=para['chi'])
+                mps_tmp[0] = mps_tmp[0] / tc.norm(mps_tmp[0])
+                rho_tmp = contract_LPS_new(mps_tmp)  # 训练得到的密度矩阵
+                rho_tmp = rho_tmp.cpu().numpy()
+                rhostate6 = contract_LPS_new(rhostate)
+                rhostate6 = rhostate6.cpu().numpy()
+                fide = np.trace(sqrtm(np.dot(np.dot(sqrtm(rhostate6), rho_tmp), sqrtm(rhostate6))))
+                print('fidelity')
+                print(abs(fide))
+                fide_def_list.append(abs(fide))
             classifier.train()
 
     # Calculate statistics for the last 20 points
-    last_20_fide1 = [float(x) for x in fide1[-20:]]
+    last_20_fide_yang = [float(x) for x in fide_yang_list[-20:]]
+    last_20_fide_def = [float(x) for x in fide_def_list[-20:]]
     last_20_trainloss = trainloss_List[-20:]
     
     stats = {
-        'fide1_mean': np.mean(last_20_fide1),
-        'fide1_std': np.std(last_20_fide1),
+        'fide_yang_mean': np.mean(last_20_fide_yang),
+        'fide_yang_std': np.std(last_20_fide_yang),
+        'fide_def_mean': np.mean(last_20_fide_def),
+        'fide_def_std': np.std(last_20_fide_def),
         'trainloss_mean': np.mean(last_20_trainloss),
         'trainloss_std': np.std(last_20_trainloss)
     }
-    
     # Create a DataFrame with parameters and statistics, excluding specific parameters
-    excluded_params = ['result_dir', 'target_state_dir', 'normal_dir', 'device', 'dtype']
+    excluded_params = ['if_fidelity_yang', 'fidelity_yang_epoch', 'if_fidelity_def', 'fidelity_def_epoch', 'result_dir', 'target_state_dir', 'normal_dir', 'device', 'dtype']
     filtered_para = {k: v for k, v in para.items() if k not in excluded_params}
     all_data = {**filtered_para, **stats}  # Combine filtered parameters and statistics
     stats_df = pd.DataFrame([all_data])
@@ -204,7 +253,7 @@ def SimpleMPS(train_dataset, para=None):
     json_para = filtered_para.copy()
     # json_para['dtype'] = str(json_para['dtype'])
     
-    dic = {'trainloss_List': trainloss_List, 'trainloss_log': trainloss_log, 'fide1': fide1}
+    dic = {'trainloss_List': trainloss_List, 'trainloss_log': trainloss_log, 'fide1': fide_yang_list}
     with open(os.path.join(result_path, f'{para["measure_train"]}_{para["sample_num"]}_chi{para["chi"]}_miu{230}.json'), 'w') as json_file:
         json.dump(dic, json_file)
     
@@ -212,7 +261,7 @@ def SimpleMPS(train_dataset, para=None):
     with open(os.path.join(result_path, f'parameters_{para["measure_train"]}_{para["sample_num"]}_chi{para["chi"]}_miu{230}.json'), 'w') as json_file:
         json.dump(json_para, json_file, indent=4)
 
-    return {'trainloss_List': trainloss_List, 'trainloss_log': trainloss_log, 'fexp': fide1}
+    return {'trainloss_List': trainloss_List, 'trainloss_log': trainloss_log, 'fexp': fide_yang_list}
 
 
 class sMPS(nn.Module):
